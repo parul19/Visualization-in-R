@@ -1,0 +1,181 @@
+options(scipen = 999)
+require(ggplot2)
+require(reshape2)
+require(dplyr)
+
+SalesData <- read.csv("SalesData.csv")
+#---------------------------------------------------------------------
+# 1. Compare Sales by region for 2016 with 2015 using bar chart
+#---------------------------------------------------------------------
+RegSales <- SalesData %>% 
+  group_by(Region) %>% 
+  dplyr::summarize(TotalSales2015=sum(Sales2015),TotalSales2016=sum(Sales2016))
+
+dat.long<-melt(RegSales,id.vars="Region",variable.name = "Year",value.name = "Sales")
+
+Plot1 <- ggplot(data = dat.long,mapping = aes(x = Region,y = Sales,fill = Year)) 
+Plot1 <- Plot1 + geom_bar(stat = "identity",position = "dodge")
+Plot1 <- Plot1 + geom_text(aes(label = ceiling(Sales)))
+Plot1
+
+Plot11 <- ggplot(data = dat.long,mapping = aes(x = Region,y = Sales)) 
+Plot11 <- Plot11 + geom_bar(stat = "identity",fill = "skyblue",color = "black")
+Plot11 <- Plot11 + facet_grid(~Year)
+Plot11 <- Plot11+ geom_text(aes(label = ceiling(Sales))) + theme_bw()
+Plot11
+
+#---------------------------------------------------------------------
+
+#---------------------------------------------------------------------
+# 2. Pie charts for sales for each region in 2016
+#---------------------------------------------------------------------
+RegSales2016 <- SalesData %>% 
+  group_by(Region) %>% 
+  dplyr::summarize(TotalSales2016=sum(Sales2016))
+
+pie(x = RegSales2016$TotalSales2016,labels = RegSales2016$Region)
+
+# with percentages
+piepercent<- paste0(round(100*RegSales2016$TotalSales2016/sum(RegSales2016$TotalSales2016), 1),"%  : ",RegSales$Region)
+pie(RegSales2016$TotalSales2016, labels = piepercent, main = "City pie chart",col = rainbow(length(RegSales2016$TotalSales2016)))
+
+#3d pie chart
+# Get the library.
+install.packages("plotrix")
+library(plotrix)
+
+x = RegSales2016$TotalSales2016
+# Plot the chart.
+pie3D(x,labels = piepercent,explode = 0.1, main = "Pie Chart of Sales 2016 ")
+
+# Using plotly
+require(plotly)
+p <- plot_ly(RegSales2016, labels = ~Region, values = ~TotalSales2016, type = 'pie') %>%
+  plotly::layout(title = 'Pie Chart of Sales 2016',
+         xaxis = list(showgrid = FALSE, zeroline = FALSE, showticklabels = FALSE),
+         yaxis = list(showgrid = FALSE, zeroline = FALSE, showticklabels = FALSE))
+p
+#---------------------------------------------------------------------
+
+#---------------------------------------------------------------------
+# 3. Compare sales of 2015 and 2016 with Region and Tiers
+#---------------------------------------------------------------------
+RegTierSales <- SalesData %>% 
+  group_by(Region,Tier) %>% 
+  dplyr::summarize(TotalSales2015=sum(Sales2015),TotalSales2016=sum(Sales2016))
+
+RegTierSales_long <- melt(RegTierSales,id.vars=c("Region","Tier"),variable.name = "Year",value.name = "Sales")
+RegTierSales_long <- na.omit(RegTierSales_long)
+Plot3 <- ggplot(data = RegTierSales_long,
+                mapping = aes(x = Tier,y = Sales,fill = Year)) 
+Plot3 <- Plot3 + geom_bar(stat = "identity",position = "dodge")
+Plot3 <- Plot3 + facet_grid(~ Region)
+Plot3
+ggplotly(Plot3,width = "100%",height = "100%")
+#---------------------------------------------------------------------
+
+#---------------------------------------------------------------------
+# 4. In East region, which state registered a decline in 2016 as compared
+#    to 2015?
+#---------------------------------------------------------------------
+RegStateSales <- SalesData %>% 
+  group_by(Region,State) %>%
+  dplyr::summarize(TotalSales2015=sum(Sales2015),TotalSales2016=sum(Sales2016))
+
+RegStateSales <- RegStateSales[RegStateSales$Region == "East",]
+
+ans <- RegStateSales$State[RegStateSales$TotalSales2015 >= RegStateSales$TotalSales2016]
+Label <- paste0("In East region, ",ans," registered a decline in sales in 2016")
+
+RegStateSales_long <- melt(RegStateSales,id.vars=c("Region","State"),variable.name = "Year",value.name = "Sales")
+RegStateSales_long <- na.omit(RegStateSales_long)
+Plot4 <- ggplot(data = RegStateSales_long,
+                mapping = aes(x = State,y = Sales,fill = Year)) 
+Plot4 <- Plot4 + geom_bar(stat = "identity",position = "dodge") + labs(caption = Label)
+Plot4
+#---------------------------------------------------------------------
+
+#---------------------------------------------------------------------
+# 5. In all the High tier, which Division saw a decline in number of
+#     units sold in 2016 compared to 2015?
+#---------------------------------------------------------------------
+TierDivSales <- SalesData %>%
+  group_by(Tier,Division) %>%
+  dplyr::summarize(TotalUnits2015=sum(Units2015),TotalUnits2016=sum(Units2016))
+
+TierDivSales_H <- TierDivSales[TierDivSales$Tier == "High",]
+
+TierDivSales_long <- melt(TierDivSales_H,id.vars=c("Tier","Division"),variable.name = "Year",value.name = "Units")
+
+Plot5 <- ggplot(data = TierDivSales_long,
+                mapping = aes(x = Division,y = Units,fill = Year)) 
+Plot5 <- Plot5 + geom_bar(stat = "identity",position = "dodge")
+Plot5 <- Plot5 + theme(axis.text.x = element_text(angle = -45, hjust = 0))
+Plot5
+#---------------------------------------------------------------------
+
+
+#---------------------------------------------------------------------
+# 6. Create a new column Qtr -
+#         Jan - Mar : Q1
+#         Apr - Jun : Q2
+#         Jul - Sep : Q3
+#         Oct - Dec : Q4   
+#---------------------------------------------------------------------
+Mon <- SalesData$Month
+SalesData$Qtr <- ifelse(Mon %in% c("Jan","Feb","Mar"),"Q1",
+                        ifelse(Mon %in% c("Apr","May","Jun"),"Q2",
+                                          ifelse(Mon %in% c("Jul","Aug","Sep"),"Q3",
+                                                 ifelse(Mon %in% c("Oct","Nov","Dec"),"Q4",""))))
+#---------------------------------------------------------------------
+
+#---------------------------------------------------------------------
+# 7. Compare Qtr wise sales in 2015 and 2016 in a bar plot
+#---------------------------------------------------------------------
+QtrSales <- SalesData %>%
+  group_by(Qtr) %>%
+  dplyr::summarize(TotalSales2015=sum(Sales2015),TotalSales2016=sum(Sales2016))
+
+QtrSales_long <- melt(QtrSales,id.vars=c("Qtr"),variable.name = "Year",value.name = "Sales")
+
+Plot7 <- ggplot(QtrSales_long,aes(x = Qtr,y = Sales,fill = Year)) + geom_bar(stat = "identity",position = "dodge")
+Plot7
+#---------------------------------------------------------------------
+
+#---------------------------------------------------------------------
+# 8. Determine the composition of Qtr wise sales in and 2015 with 
+#    regards to all the Tiers in a pie chart.
+#    (Draw 4 pie charts representing a Quarter for each Tier) 
+#---------------------------------------------------------------------
+QtrTierSales <- SalesData %>%
+  group_by(Qtr,Tier) %>%
+  dplyr::summarize(TotalSales2015=sum(Sales2015))
+
+# to set/divide the graph into 4 parts
+par(mfrow = c(2,2))
+
+# set proper margins
+par(mar=c(1,1,1,1))
+
+# Qtr 1
+Q1 <- QtrTierSales[QtrTierSales$Qtr == "Q1",]
+pie(x = Q1$TotalSales2015,labels = Q1$Tier)
+title("Qtr1")
+
+# Qtr 2
+Q2 <- QtrTierSales[QtrTierSales$Qtr == "Q2",]
+pie(x = Q2$TotalSales2015,labels = Q2$Tier)
+title("Qtr2")
+
+# Qtr 3
+Q3 <- QtrTierSales[QtrTierSales$Qtr == "Q3",]
+pie(x = Q3$TotalSales2015,labels = Q3$Tier)
+title("Qtr3")
+
+# Qtr 4
+Q4 <- QtrTierSales[QtrTierSales$Qtr == "Q4",]
+pie(x = Q4$TotalSales2015,labels = Q4$Tier)
+title("Qtr4")
+
+# reset rows
+par(mfrow = c(1,1))
